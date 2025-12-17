@@ -85,7 +85,7 @@ RL-Path/
 ├─ train.py
 ├─ evaluate.py
 ├─ report.md
-└─ artifacts/                 # created automatically
+└─ artifacts/              
 ```
 
 ---
@@ -102,7 +102,7 @@ pip install -r requirements.txt
 
 ### Download + preprocess
 
-### Download
+### Download data
 
 https://www.dgidb.org/data/latest/interactions.tsv  stored at ./data/raw as dgidb_interactions.tsv
 https://reactome.org/download/current/Ensembl2Reactome.txt stored at ./data/raw/ as Ensembl2Reactome.txt
@@ -137,4 +137,4 @@ You should see:
 
 ## 👩‍💻 Author
 
-Developed by Seirana, Generated with assistance from Leo.
+Developed by Seirana, generated with assistance from Leo.
