@@ -104,8 +104,8 @@ pip install -r requirements.txt
 
 ### Download
 
-https://www.dgidb.org/data/latest/interactions.tsv  store at ./data/raw as dgidb_interactions.tsv
-https://reactome.org/download/current/Ensembl2Reactome.txt store at ./data/raw/ Ensembl2Reactome.txt
+https://www.dgidb.org/data/latest/interactions.tsv  stored at ./data/raw as dgidb_interactions.tsv
+https://reactome.org/download/current/Ensembl2Reactome.txt stored at ./data/raw/ as Ensembl2Reactome.txt
 
 ### Train
 
