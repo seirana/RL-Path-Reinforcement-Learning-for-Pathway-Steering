@@ -1,0 +1,49 @@
+{
+  "episodes": 400,
+  "steps": 10,
+  "top_drugs": 60,
+  "top_pathways": 40,
+  "seed": 42,
+  "return_mean_last20": 0.04334230233216657,
+  "greedy_return": 0.10862029129639265,
+  "random_return": 0.018433099333196874,
+  "dqn_greedy_return": 0.03177989188116041,
+  "example_actions": {
+    "greedy": [
+      "CEDIRANIB",
+      "BORTEZOMIB",
+      "CYC-116",
+      "CYC-116",
+      "TAMOXIFEN",
+      "CYC-116",
+      "CYC-116",
+      "CYC-116",
+      "TAMOXIFEN",
+      "CYC-116"
+    ],
+    "random": [
+      "STAUROSPORINE",
+      "CHEMBL:CHEMBL546797",
+      "EPIRUBICIN",
+      "CEDIRANIB",
+      "DOXORUBICIN HYDROCHLORIDE",
+      "TOZASERTIB",
+      "PHA-767491",
+      "SP-600125",
+      "RESVERATROL",
+      "DOXORUBICIN HYDROCHLORIDE"
+    ],
+    "dqn": [
+      "BORTEZOMIB",
+      "IRINOTECAN HYDROCHLORIDE",
+      "IRINOTECAN HYDROCHLORIDE",
+      "IRINOTECAN HYDROCHLORIDE",
+      "BORTEZOMIB",
+      "TAMOXIFEN",
+      "METHOTREXATE",
+      "PICTILISIB",
+      "PICTILISIB",
+      "PICTILISIB"
+    ]
+  }
+}
