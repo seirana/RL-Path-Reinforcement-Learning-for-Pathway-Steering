@@ -102,15 +102,10 @@ pip install -r requirements.txt
 
 ### Download + preprocess
 
-download data from 
+### Download
 
 https://www.dgidb.org/data/latest/interactions.tsv  store at ./data/raw as dgidb_interactions.tsv
 https://reactome.org/download/current/Ensembl2Reactome.txt store at ./data/raw/ Ensembl2Reactome.txt
-
-
-```bash
-python train.py --downloaded
-```
 
 ### Train
 
