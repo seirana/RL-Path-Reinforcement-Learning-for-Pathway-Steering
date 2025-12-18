@@ -71,7 +71,6 @@ https://download.reactome.org/current/Ensembl2Reactome.txt
 ```text
 RL-Path/
 ├─ README.md
-├─ LICENSE
 ├─ requirements.txt
 ├─ .gitignore
 ├─ src/
