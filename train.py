@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+@author: seirana
+"""
+
 """Train DQN on the pathway-steering environment.
 
 Typical usage:
-    python scripts/download_data.py
     python train.py --episodes 400 --steps 10 --top_drugs 60 --top_pathways 40
 
 This will create:
