@@ -124,7 +124,20 @@ Artifacts land in `artifacts/`:
 
 ## 🧪 7. Expected Results
 
-You should see:
-- increasing episodic return for DQN
-- DQN achieves better final “health distance” than greedy under the same step budget
-- interpretable sequences of drugs (actions) that cover disease pathways
+After training on the drug–gene–pathway network, using
+(1) PSC WES risk genes and
+(2) PSC disease-relevant pathways (immune and fibrosis),
+
+you should observe:
+
+- Stable learning behavior of the DQN agent, with increasing episodic return as the policy improves.
+
+- Improved pathway control compared to random or greedy baselines, measured as a larger reduction in PSC-associated pathway activity under the same step budget.
+
+- Ordered sequences of drugs (rather than a flat ranking), reflecting the fact that pathway states change after each intervention.
+
+- Biologically interpretable drug orders, where early drugs tend to target immune/inflammatory pathways and later drugs increasingly affect fibrosis or tissue remodeling pathways.
+
+- Coverage of PSC disease mechanisms, showing that the learned policy preferentially selects drugs whose targets overlap PSC risk genes and PSC-enriched pathways.
+
+- Overall, the trained model produces state-dependent treatment sequences that demonstrate how drug order matters when pathway activity evolves over time.
