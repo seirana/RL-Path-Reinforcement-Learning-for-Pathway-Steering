@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+@author: seirana
+"""
+
 """Evaluate trained DQN vs baselines and save rollouts."""
 
 from __future__ import annotations
