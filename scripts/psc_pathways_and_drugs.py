@@ -1,134 +1,426 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-@author: seirana
+"""Rank PSC pathway overlaps and drug records from local research inputs.
+
+The scores in this script are pathway-overlap research signals. They are not
+clinical efficacy estimates or treatment recommendations.
 """
 
+from __future__ import annotations
+
+import argparse
 from pathlib import Path
+
 import pandas as pd
 
-RAW = Path("./data/raw")
-OUT = Path("./artifacts/psc_from_wes")
-OUT.mkdir(parents=True, exist_ok=True)
 
-PSC_FILE      = RAW / "PSC_risk_genes.csv"
-DGIDB_FILE    = RAW / "dgidb_interactions.tsv"
-REACTOME_FILE = RAW / "Ensembl2Reactome.txt"
-HGNC_FILE     = RAW / "hgnc_complete_set.tsv"
+def load_psc(path: Path) -> pd.DataFrame:
+    frame = pd.read_csv(path, dtype=str)
+    required = {"gene_symbol", "ENSG"}
+    if not required.issubset(frame.columns):
+        raise ValueError(
+            "PSC file must contain columns "
+            f"{required}. Found: {set(frame.columns)}"
+        )
 
-def load_psc():
-    df = pd.read_csv(PSC_FILE, dtype=str)
-    need = {"gene_symbol", "ENSG"}
-    if not need.issubset(df.columns):
-        raise ValueError(f"PSC file must contain columns {need}. Found: {set(df.columns)}")
-    df["gene_symbol"] = df["gene_symbol"].str.strip().str.upper()
-    df["ENSG"] = df["ENSG"].str.strip().str.replace(r"\.\d+$", "", regex=True)  # drop version suffix
-    df = df.dropna(subset=["gene_symbol", "ENSG"])
-    df = df[df["ENSG"].str.startswith("ENSG", na=False)]
-    return df
-
-def load_hgnc_sym2ensg():
-    h = pd.read_csv(HGNC_FILE, sep="\t", dtype=str)
-    h = h[["symbol", "ensembl_gene_id"]].dropna()
-    h["symbol"] = h["symbol"].str.strip().str.upper()
-    h["ensembl_gene_id"] = h["ensembl_gene_id"].str.strip().str.replace(r"\.\d+$", "", regex=True)
-    h = h.drop_duplicates("symbol")
-    return dict(zip(h["symbol"], h["ensembl_gene_id"]))
-
-def load_reactome_path2genes():
-    re = pd.read_csv(
-        REACTOME_FILE, sep="\t", header=None, dtype=str,
-        names=["gene_id", "pathway_id", "url", "pathway_name", "evidence", "species"]
+    frame["gene_symbol"] = (
+        frame["gene_symbol"]
+        .str.strip()
+        .str.upper()
     )
-    re["species"] = re["species"].str.strip().str.lower()
-    re = re[re["species"].eq("homo sapiens")].copy()
-    re["gene_id"] = re["gene_id"].str.strip().str.replace(r"\.\d+$", "", regex=True)
-    re = re[re["gene_id"].str.startswith("ENSG", na=False)].copy()
-    re["pathway_name"] = re["pathway_name"].str.strip()
-    path2genes = re.groupby("pathway_name")["gene_id"].apply(lambda x: set(x)).to_dict()
-    return re, path2genes
+    frame["ENSG"] = (
+        frame["ENSG"]
+        .str.strip()
+        .str.replace(
+            r"\.\d+$",
+            "",
+            regex=True,
+        )
+    )
+    frame = frame.dropna(
+        subset=["gene_symbol", "ENSG"]
+    )
+    frame = frame[
+        frame["ENSG"].str.startswith(
+            "ENSG",
+            na=False,
+        )
+    ]
+    return frame
 
-def load_dgidb_drug2sym():
-    dg = pd.read_csv(DGIDB_FILE, sep="\t", dtype=str)
-    dg = dg[["drug_name", "gene_name"]].dropna()
-    dg["drug_name"] = dg["drug_name"].str.strip()
-    dg["gene_name"] = dg["gene_name"].str.strip().str.upper()
-    return dg.groupby("drug_name")["gene_name"].apply(lambda x: set(x)).to_dict()
 
-def main():
-    psc = load_psc()
-    psc_syms = set(psc["gene_symbol"])
-    psc_ensg = set(psc["ENSG"])
+def load_hgnc_symbol_to_ensembl(
+    path: Path,
+) -> dict[str, str]:
+    frame = pd.read_csv(
+        path,
+        sep="\t",
+        dtype=str,
+    )
+    required = {
+        "symbol",
+        "ensembl_gene_id",
+    }
+    if not required.issubset(frame.columns):
+        raise ValueError(
+            "HGNC file must contain columns "
+            f"{required}."
+        )
 
-    print(f"[ok] PSC genes: {len(psc)} rows | symbols: {len(psc_syms)} | ENSG: {len(psc_ensg)}")
+    frame = frame[
+        ["symbol", "ensembl_gene_id"]
+    ].dropna()
+    frame["symbol"] = (
+        frame["symbol"]
+        .str.strip()
+        .str.upper()
+    )
+    frame["ensembl_gene_id"] = (
+        frame["ensembl_gene_id"]
+        .str.strip()
+        .str.replace(
+            r"\.\d+$",
+            "",
+            regex=True,
+        )
+    )
+    frame = frame.drop_duplicates("symbol")
+    return dict(
+        zip(
+            frame["symbol"],
+            frame["ensembl_gene_id"],
+            strict=True,
+        )
+    )
 
-    re_df, path2genes = load_reactome_path2genes()
-    print(f"[ok] Reactome human ENSG rows: {len(re_df):,} | pathways: {len(path2genes):,}")
 
-    # ---- Affected pathways from PSC ENSG ----
-    path_rows = []
-    for p, genes in path2genes.items():
-        overlap = genes & psc_ensg
+def load_reactome_pathway_genes(
+    path: Path,
+) -> tuple[pd.DataFrame, dict[str, set[str]]]:
+    frame = pd.read_csv(
+        path,
+        sep="\t",
+        header=None,
+        dtype=str,
+        names=[
+            "gene_id",
+            "pathway_id",
+            "url",
+            "pathway_name",
+            "evidence",
+            "species",
+        ],
+    )
+    frame["species"] = (
+        frame["species"]
+        .str.strip()
+        .str.lower()
+    )
+    frame = frame[
+        frame["species"].eq("homo sapiens")
+    ].copy()
+    frame["gene_id"] = (
+        frame["gene_id"]
+        .str.strip()
+        .str.replace(
+            r"\.\d+$",
+            "",
+            regex=True,
+        )
+    )
+    frame = frame[
+        frame["gene_id"].str.startswith(
+            "ENSG",
+            na=False,
+        )
+    ].copy()
+    frame["pathway_name"] = (
+        frame["pathway_name"].str.strip()
+    )
+
+    pathway_to_genes = (
+        frame.groupby("pathway_name")["gene_id"]
+        .apply(lambda values: set(values))
+        .to_dict()
+    )
+    return frame, pathway_to_genes
+
+
+def load_dgidb_drug_to_symbol(
+    path: Path,
+) -> dict[str, set[str]]:
+    frame = pd.read_csv(
+        path,
+        sep="\t",
+        dtype=str,
+    )
+    required = {
+        "drug_name",
+        "gene_name",
+    }
+    if not required.issubset(frame.columns):
+        raise ValueError(
+            "DGIdb file must contain columns "
+            f"{required}."
+        )
+
+    frame = frame[
+        ["drug_name", "gene_name"]
+    ].dropna()
+    frame["drug_name"] = (
+        frame["drug_name"].str.strip()
+    )
+    frame["gene_name"] = (
+        frame["gene_name"]
+        .str.strip()
+        .str.upper()
+    )
+    return (
+        frame.groupby("drug_name")["gene_name"]
+        .apply(lambda values: set(values))
+        .to_dict()
+    )
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Compute PSC pathway-overlap research signals from local data."
+        )
+    )
+    parser.add_argument(
+        "--raw-dir",
+        type=Path,
+        default=Path("data/raw"),
+    )
+    parser.add_argument(
+        "--outdir",
+        type=Path,
+        default=Path("artifacts/psc_from_wes"),
+    )
+    parser.add_argument(
+        "--psc-file",
+        type=str,
+        default="PSC_risk_genes.csv",
+    )
+    parser.add_argument(
+        "--dgidb-file",
+        type=str,
+        default="dgidb_interactions.tsv",
+    )
+    parser.add_argument(
+        "--reactome-file",
+        type=str,
+        default="Ensembl2Reactome.txt",
+    )
+    parser.add_argument(
+        "--hgnc-file",
+        type=str,
+        default="hgnc_complete_set.tsv",
+    )
+    parser.add_argument(
+        "--top-pathways",
+        type=int,
+        default=50,
+    )
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    if args.top_pathways <= 0:
+        raise ValueError("top-pathways must be greater than 0")
+
+    args.outdir.mkdir(parents=True, exist_ok=True)
+
+    psc = load_psc(
+        args.raw_dir / args.psc_file
+    )
+    psc_symbols = set(psc["gene_symbol"])
+    psc_ensembl = set(psc["ENSG"])
+
+    print(
+        "[ok] PSC genes: "
+        f"{len(psc)} rows | "
+        f"symbols: {len(psc_symbols)} | "
+        f"ENSG: {len(psc_ensembl)}"
+    )
+
+    reactome_frame, pathway_to_genes = (
+        load_reactome_pathway_genes(
+            args.raw_dir / args.reactome_file
+        )
+    )
+    print(
+        "[ok] Reactome human ENSG rows: "
+        f"{len(reactome_frame):,} | "
+        f"pathways: {len(pathway_to_genes):,}"
+    )
+
+    pathway_rows: list[dict[str, object]] = []
+    for pathway, genes in pathway_to_genes.items():
+        overlap = genes & psc_ensembl
         if overlap:
-            path_rows.append({
-                "pathway": p,
-                "n_psc_genes_in_pathway": len(overlap),
-                "n_pathway_genes": len(genes),
-                "psc_ensg_genes": ";".join(sorted(overlap)),
-            })
+            pathway_rows.append(
+                {
+                    "pathway": pathway,
+                    "n_psc_genes_in_pathway": len(overlap),
+                    "n_pathway_genes": len(genes),
+                    "psc_ensg_genes": ";".join(sorted(overlap)),
+                }
+            )
 
-    path_df = pd.DataFrame(path_rows).sort_values(
-        ["n_psc_genes_in_pathway", "n_pathway_genes"], ascending=[False, True]
+    pathway_frame = pd.DataFrame(
+        pathway_rows,
+        columns=[
+            "pathway",
+            "n_psc_genes_in_pathway",
+            "n_pathway_genes",
+            "psc_ensg_genes",
+        ],
     )
-    out_path = OUT / "psc_affected_pathways.csv"
-    path_df.to_csv(out_path, index=False)
-    print(f"[ok] wrote {out_path} ({len(path_df)} pathways)")
+    if not pathway_frame.empty:
+        pathway_frame = pathway_frame.sort_values(
+            [
+                "n_psc_genes_in_pathway",
+                "n_pathway_genes",
+            ],
+            ascending=[False, True],
+        )
 
-    # ---- Drug scoring: DGIdb symbols -> ENSG via HGNC -> pathway hits ----
-    sym2ensg = load_hgnc_sym2ensg()
-    drug2sym = load_dgidb_drug2sym()
+    pathway_output = (
+        args.outdir / "psc_affected_pathways.csv"
+    )
+    pathway_frame.to_csv(
+        pathway_output,
+        index=False,
+    )
+    print(
+        f"[ok] wrote {pathway_output} "
+        f"({len(pathway_frame)} pathways)"
+    )
 
-    drug_rows = []
-    top_paths = path_df.head(50)
-    p_weight = dict(zip(top_paths["pathway"], top_paths["n_psc_genes_in_pathway"].astype(float)))
+    symbol_to_ensembl = load_hgnc_symbol_to_ensembl(
+        args.raw_dir / args.hgnc_file
+    )
+    drug_to_symbols = load_dgidb_drug_to_symbol(
+        args.raw_dir / args.dgidb_file
+    )
 
-    # precompute pathway genes for top paths
-    top_path2genes = {p: path2genes[p] for p in p_weight.keys()}
+    top_paths = pathway_frame.head(
+        args.top_pathways
+    )
+    pathway_weights = dict(
+        zip(
+            top_paths["pathway"],
+            top_paths[
+                "n_psc_genes_in_pathway"
+            ].astype(float),
+            strict=True,
+        )
+    )
+    top_pathway_to_genes = {
+        pathway: pathway_to_genes[pathway]
+        for pathway in pathway_weights
+    }
 
-    for drug, syms in drug2sym.items():
-        targets = {sym2ensg[s] for s in syms if s in sym2ensg}
-        targets = {t for t in targets if isinstance(t, str) and t.startswith("ENSG")}
+    drug_rows: list[dict[str, object]] = []
+    for drug, symbols in drug_to_symbols.items():
+        targets = {
+            symbol_to_ensembl[symbol]
+            for symbol in symbols
+            if symbol in symbol_to_ensembl
+        }
+        targets = {
+            target
+            for target in targets
+            if isinstance(target, str)
+            and target.startswith("ENSG")
+        }
         if not targets:
             continue
 
         score = 0.0
-        hits_total = 0
-        for p, w in p_weight.items():
-            hit = len(targets & top_path2genes[p])
-            if hit:
-                score += w * (hit / len(targets))  # penalize promiscuous drugs
-                hits_total += hit
+        total_hits = 0
+        for pathway, weight in pathway_weights.items():
+            hit_count = len(
+                targets
+                & top_pathway_to_genes[pathway]
+            )
+            if hit_count:
+                score += (
+                    weight
+                    * (hit_count / len(targets))
+                )
+                total_hits += hit_count
 
         if score > 0:
-            drug_rows.append({
-                "drug": drug,
-                "score": score,
-                "n_targets": len(targets),
-                "total_pathway_hits": hits_total
-            })
+            drug_rows.append(
+                {
+                    "drug": drug,
+                    "score": score,
+                    "n_targets": len(targets),
+                    "total_pathway_hits": total_hits,
+                }
+            )
 
-    drug_df = pd.DataFrame(drug_rows).sort_values("score", ascending=False)
-    out_drug = OUT / "psc_drug_ranking_from_pathways.csv"
-    drug_df.to_csv(out_drug, index=False)
-    print(f"[ok] wrote {out_drug} ({len(drug_df)} drugs)")
+    drug_frame = pd.DataFrame(
+        drug_rows,
+        columns=[
+            "drug",
+            "score",
+            "n_targets",
+            "total_pathway_hits",
+        ],
+    )
+    if not drug_frame.empty:
+        drug_frame = drug_frame.sort_values(
+            "score",
+            ascending=False,
+        )
 
-    # preview
-    if len(path_df):
-        print("\nTop affected pathways:")
-        print(path_df.head(10)[["pathway", "n_psc_genes_in_pathway", "n_pathway_genes"]].to_string(index=False))
-    if len(drug_df):
-        print("\nTop candidate drugs:")
-        print(drug_df.head(15)[["drug", "score", "n_targets", "total_pathway_hits"]].to_string(index=False))
+    drug_output = (
+        args.outdir
+        / "psc_drug_ranking_from_pathways.csv"
+    )
+    drug_frame.to_csv(
+        drug_output,
+        index=False,
+    )
+    print(
+        f"[ok] wrote {drug_output} "
+        f"({len(drug_frame)} drugs)"
+    )
+
+    if len(pathway_frame):
+        print("\nTop pathway-overlap records:")
+        print(
+            pathway_frame.head(10)[
+                [
+                    "pathway",
+                    "n_psc_genes_in_pathway",
+                    "n_pathway_genes",
+                ]
+            ].to_string(index=False)
+        )
+
+    if len(drug_frame):
+        print(
+            "\nTop drug/pathway-overlap records "
+            "(research signal only; not a treatment recommendation):"
+        )
+        print(
+            drug_frame.head(15)[
+                [
+                    "drug",
+                    "score",
+                    "n_targets",
+                    "total_pathway_hits",
+                ]
+            ].to_string(index=False)
+        )
+
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
