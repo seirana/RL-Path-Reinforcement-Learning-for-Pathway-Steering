@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environments
+.venv/
+venv/
+env/
+
+# Local configuration
+.env
+.env.*
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+
+# External data and derived matrices
+data/raw/*
+!data/raw/README.md
+!data/raw/PSC_risk_genes.csv
+
+data/processed/*
+!data/processed/.gitkeep
+
+# Historical misspelling retained only as ignored local path
+data/procesed/
+
+# Generated experiment outputs
+artifacts/*
+!artifacts/.gitkeep
