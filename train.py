@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import platform
+import subprocess
 import sys
 from pathlib import Path
 
@@ -25,6 +27,34 @@ from src.preprocess import (
     load_reactome_ensembl2reactome,
     save_effects,
 )
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(
+            lambda: handle.read(1024 * 1024),
+            b"",
+        ):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def git_commit() -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (
+        FileNotFoundError,
+        subprocess.CalledProcessError,
+    ):
+        return None
+    value = result.stdout.strip()
+    return value or None
 
 
 def ensure_effects(
@@ -327,8 +357,32 @@ def main() -> int:
         "platform": platform.platform(),
         "numpy": np.__version__,
         "torch": torch.__version__,
+        "git_commit": git_commit(),
         "checkpoint": str(checkpoint_path),
         "effect_matrix": str(effect_path),
+        "input_sha256": {
+            "effect_matrix": file_sha256(effect_path),
+            "dgidb": (
+                file_sha256(
+                    args.raw_dir / "dgidb_interactions.tsv"
+                )
+                if (
+                    args.raw_dir
+                    / "dgidb_interactions.tsv"
+                ).exists()
+                else None
+            ),
+            "reactome": (
+                file_sha256(
+                    args.raw_dir / "Ensembl2Reactome.txt"
+                )
+                if (
+                    args.raw_dir
+                    / "Ensembl2Reactome.txt"
+                ).exists()
+                else None
+            ),
+        },
     }
     (args.outdir / "run_metadata.json").write_text(
         json.dumps(run_metadata, indent=2),
