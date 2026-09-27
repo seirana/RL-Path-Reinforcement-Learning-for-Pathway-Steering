@@ -56,8 +56,12 @@ class DQNConfig:
             raise ValueError("batch_size must be greater than 0")
         if self.replay_size <= 0:
             raise ValueError("replay_size must be greater than 0")
+        if self.batch_size > self.replay_size:
+            raise ValueError("batch_size must not exceed replay_size")
         if self.min_replay < 0:
             raise ValueError("min_replay must be non-negative")
+        if self.min_replay > self.replay_size:
+            raise ValueError("min_replay must not exceed replay_size")
         if self.target_update <= 0:
             raise ValueError("target_update must be greater than 0")
         if not 0.0 <= self.eps_end <= self.eps_start <= 1.0:
